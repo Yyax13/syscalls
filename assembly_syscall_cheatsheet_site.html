@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assembly Syscall Cheatsheet — x86_64 Linux</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#93a3bf;--accent:#7dd3fc;--glass:rgba(255,255,255,0.03);--code-bg:#071022}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#e6eef8;background:linear-gradient(180deg,#071026 0%, #071a2a 100%)}
+    .wrap{max-width:980px;margin:28px auto;padding:24px}
+    header{display:flex;gap:16px;align-items:center;justify-content:space-between}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 0;font-size:13px}
+
+    .controls{display:flex;gap:8px;align-items:center;margin-top:18px}
+    input.search{flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);background:var(--glass);color:inherit}
+    .btn{padding:8px 12px;border-radius:10px;border:0;background:linear-gradient(180deg,var(--card),#041124);color:var(--accent);cursor:pointer}
+
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:18px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:16px;border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03)}
+    th{color:var(--muted);font-weight:600}
+    td.var{font-family:monospace;color:#cbe6ff;min-width:82px}
+    td.num{font-family:monospace;color:#ffd8a8;width:80px}
+
+    pre.code{background:var(--code-bg);padding:12px;border-radius:8px;font-family:monospace;font-size:13px;overflow:auto}
+    .small{font-size:12px;color:var(--muted)}
+
+    .right-col{display:flex;flex-direction:column;gap:12px}
+    .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:rgba(125,211,252,0.08);color:var(--accent);font-weight:600;font-size:12px}
+
+    .copy{float:right;background:transparent;border:0;color:var(--accent);cursor:pointer;font-size:13px}
+
+    footer{margin-top:20px;color:var(--muted);font-size:13px}
+
+    @media (max-width:880px){.grid{grid-template-columns:1fr}.right-col{order:2}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Assembly Syscall Cheatsheet — x86_64 Linux</h1>
+        <p class="lead">Rápido lookup de números e convenções de argumentos para construir shellcode e programas com <code>syscall</code>.</p>
+      </div>
+      <div style="text-align:right">
+        <span class="badge">x86_64</span>
+        <div class="small">Argumentos: rdi, rsi, rdx, r10, r8, r9 · num → rax</div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <input id="q" class="search" placeholder="Buscar syscall, número, descrição (ex: execve, 59, write)" oninput="filter()" />
+      <button class="btn" onclick="reset()">Limpar</button>
+      <button class="btn" onclick="toggleExample()">Exemplo</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <table id="tbl">
+          <thead>
+            <tr><th>Syscall</th><th>Número</th><th>Args</th><th>Descrição</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="var">read</td><td class="num">0</td><td>rdi, rsi, rdx</td><td>ler de fd</td></tr>
+            <tr><td class="var">write</td><td class="num">1</td><td>rdi, rsi, rdx</td><td>escrever em fd</td></tr>
+            <tr><td class="var">open</td><td class="num">2</td><td>rdi, rsi, rdx</td><td>abrir arquivo</td></tr>
+            <tr><td class="var">close</td><td class="num">3</td><td>rdi</td><td>fechar fd</td></tr>
+            <tr><td class="var">mmap</td><td class="num">9</td><td>rdi, rsi, rdx, r10, r8, r9</td><td>mapear memória</td></tr>
+            <tr><td class="var">mprotect</td><td class="num">10</td><td>rdi, rsi, rdx</td><td>mudar proteção</td></tr>
+            <tr><td class="var">munmap</td><td class="num">11</td><td>rdi, rsi</td><td>desmapear</td></tr>
+            <tr><td class="var">brk</td><td class="num">12</td><td>rdi</td><td>ajustar heap</td></tr>
+            <tr><td class="var">execve</td><td class="num">59</td><td>rdi, rsi, rdx</td><td>executar programa</td></tr>
+            <tr><td class="var">exit</td><td class="num">60</td><td>rdi</td><td>terminar processo</td></tr>
+            <tr><td class="var">fork</td><td class="num">57</td><td>—</td><td>criar processo</td></tr>
+            <tr><td class="var">vfork</td><td class="num">58</td><td>—</td><td>vfork</td></tr>
+            <tr><td class="var">clone</td><td class="num">56</td><td>rdi, rsi, rdx, r10, r8</td><td>criar thread/processo</td></tr>
+            <tr><td class="var">getpid</td><td class="num">39</td><td>—</td><td>pegar PID</td></tr>
+            <tr><td class="var">openat</td><td class="num">257</td><td>rdi, rsi, rdx, r10</td><td>open relativo</td></tr>
+            <tr><td class="var">pread64</td><td class="num">17</td><td>rdi, rsi, rdx, r10</td><td>ler em offset</td></tr>
+            <tr><td class="var">pwrite64</td><td class="num">18</td><td>rdi, rsi, rdx, r10</td><td>escrever em offset</td></tr>
+            <tr><td class="var">ioctl</td><td class="num">16</td><td>rdi, rsi, rdx</td><td>controle de dispositivo</td></tr>
+            <tr><td class="var">uname</td><td class="num">63</td><td>rdi</td><td>info do sistema</td></tr>
+            <tr><td class="var">kill</td><td class="num">62</td><td>rdi, rsi</td><td>enviar sinal</td></tr>
+            <tr><td class="var">wait4</td><td class="num">61</td><td>rdi, rsi, rdx, r10</td><td>esperar processo</td></tr>
+          </tbody>
+        </table>
+
+        <footer class="small">Tabela reduzida — personalize pedindo mais syscalls ou export em CSV/JSON.</footer>
+      </div>
+
+      <aside class="right-col">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <div>
+              <strong>Exemplo: write + exit</strong>
+              <div class="small">Assemble & link (nasm + ld)</div>
+            </div>
+            <button class="btn" onclick="copyExample()">Copiar</button>
+          </div>
+          <pre id="example" class="code">section .data
+msg db "Hello", 10
+len equ $ - msg
+
+section .text
+global _start
+
+_start:
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, msg
+    mov rdx, len
+    syscall
+
+    mov rax, 60
+    xor rdi, rdi
+    syscall</pre>
+          <div class="small" style="margin-top:8px">Dica: use registros conforme a convenção (rdi, rsi, rdx, r10, r8, r9). Retorno em rax (-errno em caso de erro).</div>
+        </div>
+
+        <div class="card">
+          <strong>Exportar</strong>
+          <div class="small" style="margin-top:8px">Você pode copiar a tabela ou baixar como CSV.</div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button class="btn" onclick="downloadCSV()">Download CSV</button>
+            <button class="btn" onclick="downloadHTML()">Download HTML</button>
+          </div>
+        </div>
+
+        <div class="card small">
+          Feito rápido — peça: mais syscalls, exemplos (mmap, execve), ou versão minimal para shellcode.
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    function filter(){
+      const q = document.getElementById('q').value.toLowerCase();
+      const trs = document.querySelectorAll('#tbl tbody tr');
+      trs.forEach(tr=>{
+        const text = tr.innerText.toLowerCase();
+        tr.style.display = text.includes(q) ? '' : 'none';
+      })
+    }
+    function reset(){document.getElementById('q').value='';filter()}
+    function copyExample(){
+      const txt = document.getElementById('example').innerText;
+      navigator.clipboard.writeText(txt).then(()=>alert('Exemplo copiado!'))
+    }
+    function toggleExample(){
+      const el = document.getElementById('example');
+      el.parentElement.style.display = el.parentElement.style.display === 'none' ? '' : 'block';
+    }
+    function downloadCSV(){
+      const rows = [['syscall','number','args','desc']];
+      document.querySelectorAll('#tbl tbody tr').forEach(tr=>{
+        const tds = tr.querySelectorAll('td');
+        rows.push([tds[0].innerText,tds[1].innerText,tds[2].innerText,tds[3].innerText]);
+      });
+      const csv = rows.map(r=>r.map(cell=>'"'+cell.replace(/"/g,'""')+'"').join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='syscalls.csv';a.click();URL.revokeObjectURL(url);
+    }
+    function downloadHTML(){
+      const html = document.documentElement.outerHTML;
+      const blob = new Blob([html],{type:'text/html'});
+      const url = URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='assembly-syscall-cheatsheet.html';a.click();URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
